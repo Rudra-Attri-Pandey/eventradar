@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EventRadar — Swipe Local Events</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="glass-bg"></div>
+
+  <div class="container">
+    <header class="app-header">
+      <div class="header-main">
+        <span class="logo-icon">📅</span>
+        <h1>EventRadar</h1>
+      </div>
+      <!-- Tab Controls -->
+      <nav class="tab-controls">
+        <button id="tab-swipe" class="tab-btn active">Swipe Deck</button>
+        <button id="tab-scan" class="tab-btn">Scan Flyer</button>
+        <button id="tab-submit" class="tab-btn">Submit Event</button>
+      </nav>
+    </header>
+
+    <!-- Content panels -->
+    <main class="main-content">
+      
+      <!-- Panel 1: Swipe Deck -->
+      <section id="panel-swipe" class="tab-panel active">
+        <div class="filter-bar">
+          <input type="text" id="filter-area" class="filter-input" placeholder="Filter by area (e.g. Downtown)">
+          <select id="filter-category" class="filter-input">
+            <option value="">All categories</option>
+            <option value="music">music</option>
+            <option value="tech">tech</option>
+            <option value="art">art</option>
+            <option value="food">food</option>
+            <option value="sports">sports</option>
+            <option value="nightlife">nightlife</option>
+            <option value="community">community</option>
+            <option value="other">other</option>
+          </select>
+          <button id="btn-filter" class="btn btn-secondary">Apply</button>
+        </div>
+        <p id="deck-status" class="deck-status" role="status"></p>
+        <div class="deck-container">
+          <div class="swipe-deck" id="swipe-deck">
+            <!-- JS dynamically injects card -->
+            <div class="empty-deck hidden" id="empty-deck">
+              <span class="empty-icon">📭</span>
+              <h4>Out of events in your area!</h4>
+              <p>Try scanning a new flyer to add to the radar.</p>
+            </div>
+          </div>
+          
+          <!-- Actions Bar -->
+          <div class="action-buttons">
+            <button class="action-btn btn-pass" id="btn-pass" title="Pass (Swipe Left)">✕</button>
+            <button class="action-btn btn-like" id="btn-like" title="Interested (Swipe Right)">⭐</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 2: Flyer Vision Scanner -->
+      <section id="panel-scan" class="tab-panel">
+        <div class="scanner-grid">
+          <!-- Left: Upload flyer -->
+          <div class="scan-card upload-section">
+            <h3>Extract Event Details From Image</h3>
+            <p class="desc">Paste or drag a screenshot of an Instagram flyer, poster, or ticket to parse event details instantly.</p>
+            
+            <div class="drop-zone" id="drop-zone">
+              <span class="upload-icon">📸</span>
+              <p>Upload flyer image here</p>
+              <input type="file" id="file-input" class="hidden-input" accept="image/*">
+            </div>
+
+            <div class="sample-flyer-box">
+              <button id="btn-sample-scan" class="btn btn-secondary">Use Sample Concert Flyer</button>
+            </div>
+          </div>
+
+          <!-- Right: Scanner visualizer & overlays -->
+          <div class="scan-card preview-section">
+            <h3>AI Vision Parsing</h3>
+            <div class="flyer-preview-container">
+              <div class="flyer-preview" id="flyer-preview">
+                <div class="placeholder-preview">Flyer preview with bounding boxes appears here</div>
+                <!-- Bounding boxes and scanning lines will be injected by JS -->
+              </div>
+            </div>
+            
+            <div class="parsed-results hidden" id="parsed-results">
+              <h4>Parsed Event Properties:</h4>
+              <p id="scan-status" class="scan-status" role="status"></p>
+              <ul class="properties-list">
+                <li><strong>Title:</strong> <span id="res-title">-</span></li>
+                <li><strong>Date:</strong> <span id="res-date">-</span></li>
+                <li><strong>Time:</strong> <span id="res-time">-</span></li>
+                <li><strong>Venue:</strong> <span id="res-venue">-</span></li>
+                <li><strong>Category:</strong> <span id="res-category">-</span></li>
+              </ul>
+              <button id="btn-use-details" class="btn btn-primary btn-block">Use These Details in Submit Form</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 3: Submit Event (community board) -->
+      <section id="panel-submit" class="tab-panel">
+        <div class="scan-card">
+          <h3>Submit a Local Event</h3>
+          <p class="desc">Community board — your submission is posted to the shared deck via the API. Flyer scans pre-fill this form; you confirm before it goes live.</p>
+          <form id="submit-form" class="submit-form">
+            <label>Title <input type="text" id="f-title" required minlength="3" maxlength="120" placeholder="Event title"></label>
+            <div class="form-row">
+              <label>Date (YYYY-MM-DD) <input type="text" id="f-date" required placeholder="2026-11-12" pattern="\d{4}-\d{2}-\d{2}"></label>
+              <label>Time <input type="text" id="f-time" required maxlength="80" placeholder="8:00 PM - Midnight"></label>
+            </div>
+            <div class="form-row">
+              <label>Venue <input type="text" id="f-venue" required maxlength="120" placeholder="Venue name"></label>
+              <label>Area <input type="text" id="f-area" required maxlength="60" placeholder="Downtown"></label>
+            </div>
+            <div class="form-row">
+              <label>Category
+                <select id="f-category">
+                  <option value="music">music</option>
+                  <option value="tech">tech</option>
+                  <option value="art">art</option>
+                  <option value="food">food</option>
+                  <option value="sports">sports</option>
+                  <option value="nightlife">nightlife</option>
+                  <option value="community">community</option>
+                  <option value="other" selected>other</option>
+                </select>
+              </label>
+              <label>Image URL (optional) <input type="text" id="f-image" maxlength="2000" placeholder="https://…"></label>
+            </div>
+            <label>Description (optional) <textarea id="f-desc" maxlength="2000" rows="3" placeholder="What is it about?"></textarea></label>
+            <p id="submit-status" class="deck-status" role="status"></p>
+            <button type="submit" class="btn btn-primary btn-block">Post Event to Board</button>
+          </form>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

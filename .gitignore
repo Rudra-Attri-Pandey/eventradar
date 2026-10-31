@@ -1,0 +1,11 @@
+node_modules/
+.env
+data/
+
+# deploy hygiene (auto-added)
+.env.local
+*.db
+*.sqlite3
+*.log
+.vercel
+__pycache__/
