@@ -3,8 +3,11 @@
  *   - AI flyer vision: GEMINI_API_KEY set. POST /api/flyer extracts
  *     {title,date,time,venue,category,confidence} via Gemini vision.
  *   - No key: /api/flyer returns honest 503. Events board works keyless.
- * Store: JSON file data/events.json (gitignored). Seeded once with 3
- * clearly-labeled sample events ("seed":true) so the deck isn't empty.
+ * Store: dual-mode — Supabase PostgREST table radar_events (via ./supabase.js)
+ * when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set (seeds auto-inserted
+ * once if the table is empty — idempotent); else JSON file data/events.json
+ * (gitignored), seeded once with 3 clearly-labeled sample events
+ * ("seed":true) so the deck isn't empty.
  */
 'use strict';
 
@@ -17,6 +20,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const multer = require('multer');
+const { sbConfigured, sbInsert, sbList, sbGet, sbUpdate } = require('./supabase');
 
 const APP_DIR = __dirname;
 const DATA_DIR = path.join(APP_DIR, 'data');
@@ -24,6 +28,9 @@ const STORE_FILE = path.join(DATA_DIR, 'events.json');
 const GEMINI_KEY = (process.env.GEMINI_API_KEY || '').trim();
 const AI_MODE = Boolean(GEMINI_KEY);
 const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite'];
+
+// Supabase PostgREST is the source of truth when configured; JSON file (dev) otherwise.
+const USE_SB = sbConfigured();
 
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:3015')
   .split(',').map((s) => s.trim()).filter(Boolean);
@@ -145,7 +152,7 @@ function loadStore() {
   }
 }
 
-let events = loadStore();
+let events = USE_SB ? [] : loadStore(); // unused in Supabase mode
 
 function saveStore() {
   try {
@@ -155,6 +162,66 @@ function saveStore() {
     fs.renameSync(tmp, STORE_FILE);
   } catch (e) {
     console.error('[eventradar] store save failed:', e.message);
+  }
+}
+
+// --- Supabase (radar_events) row mapping -----------------------------------
+// Table columns are snake_case (image_url, created_at); the API speaks
+// camelCase (imageUrl, createdAt) — map both ways so endpoint shapes and
+// the frontend never change.
+function toRow(ev) {
+  return {
+    id: ev.id,
+    title: ev.title,
+    date: ev.date,
+    time: ev.time,
+    venue: ev.venue,
+    area: ev.area,
+    category: ev.category,
+    description: ev.description || '',
+    image_url: ev.imageUrl || '',
+    likes: Number(ev.likes) || 0,
+    passes: Number(ev.passes) || 0,
+    seed: Boolean(ev.seed),
+    created_at: ev.createdAt || new Date().toISOString(),
+  };
+}
+
+function fromRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    date: row.date,
+    time: row.time,
+    venue: row.venue,
+    area: row.area,
+    category: row.category,
+    description: row.description || '',
+    imageUrl: row.image_url || '',
+    likes: Number(row.likes) || 0,
+    passes: Number(row.passes) || 0,
+    seed: Boolean(row.seed),
+    createdAt: row.created_at,
+  };
+}
+
+// Idempotent seeding: insert the 3 sample events only when the table is empty.
+let seedChecked = false;
+async function ensureSeededSb() {
+  if (seedChecked) return;
+  try {
+    const rows = await sbList('radar_events', { limit: 1 });
+    if (rows.length === 0) {
+      const now = new Date().toISOString();
+      for (const ev of seedEvents()) {
+        // eslint-disable-next-line no-await-in-loop
+        await sbInsert('radar_events', toRow({ ...ev, createdAt: now })); // seed:true already set
+      }
+      console.log('[eventradar] supabase: seeded 3 sample events (seed:true)');
+    }
+    seedChecked = true;
+  } catch (e) {
+    console.error('[eventradar] supabase seed check failed (will retry):', (e && e.message) || e);
   }
 }
 
@@ -283,21 +350,43 @@ const upload = multer({
 });
 
 // --- API -------------------------------------------------------------------
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, ai: AI_MODE, mode: AI_MODE ? 'ai' : 'no-key', eventCount: events.length, simulated: false });
+app.get('/api/health', async (_req, res) => {
+  if (USE_SB) {
+    try {
+      await ensureSeededSb();
+      const rows = await sbList('radar_events', { limit: 1000 });
+      return res.json({ ok: true, ai: AI_MODE, mode: AI_MODE ? 'ai' : 'no-key', store: 'supabase', eventCount: rows.length, simulated: false });
+    } catch (e) {
+      return res.status(500).json({ error: `Store read failed: ${(e && e.message) || e}` });
+    }
+  }
+  return res.json({ ok: true, ai: AI_MODE, mode: AI_MODE ? 'ai' : 'no-key', store: 'json-file', eventCount: events.length, simulated: false });
 });
 
-app.get('/api/events', (req, res) => {
+app.get('/api/events', async (req, res) => {
   const area = str(req.query.area).trim().toLowerCase();
   const category = str(req.query.category).trim().toLowerCase();
+  if (USE_SB) {
+    try {
+      await ensureSeededSb();
+      const filter = {};
+      if (area) filter.area = `ilike.${area}`; // case-insensitive exact match, as before
+      if (category) filter.category = `ilike.${category}`;
+      const rows = await sbList('radar_events', { filter, order: 'created_at.desc', limit: 1000 });
+      const out = rows.map(fromRow);
+      return res.json({ events: out, count: out.length, simulated: false });
+    } catch (e) {
+      return res.status(500).json({ error: `Store read failed: ${(e && e.message) || e}` });
+    }
+  }
   let out = [...events];
   if (area) out = out.filter((e) => str(e.area).toLowerCase() === area);
   if (category) out = out.filter((e) => str(e.category).toLowerCase() === category);
   out.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-  res.json({ events: out, count: out.length, simulated: false });
+  return res.json({ events: out, count: out.length, simulated: false });
 });
 
-app.post('/api/events', (req, res) => {
+app.post('/api/events', async (req, res) => {
   const { errors, value } = validateEvent(req.body || {});
   if (errors) return res.status(400).json({ error: errors.join('; ') });
   const ev = {
@@ -308,25 +397,57 @@ app.post('/api/events', (req, res) => {
     seed: false,
     createdAt: new Date().toISOString(),
   };
+  if (USE_SB) {
+    try {
+      const row = await sbInsert('radar_events', toRow(ev));
+      return res.status(201).json({ event: row ? fromRow(row) : ev });
+    } catch (e) {
+      return res.status(500).json({ error: `Store write failed: ${(e && e.message) || e}` });
+    }
+  }
   events.push(ev);
   saveStore();
-  res.status(201).json({ event: ev });
+  return res.status(201).json({ event: ev });
 });
 
-app.post('/api/events/:id/like', voteLimiter, (req, res) => {
+app.post('/api/events/:id/like', voteLimiter, async (req, res) => {
+  if (USE_SB) {
+    try {
+      const row = await sbGet('radar_events', req.params.id);
+      if (!row) return res.status(404).json({ error: 'Event not found' });
+      const likes = (Number(row.likes) || 0) + 1; // read row, update likes+1 (no atomic increment; fine at demo scale)
+      const updated = await sbUpdate('radar_events', req.params.id, { likes });
+      const ev = updated ? fromRow(updated) : { ...fromRow(row), likes };
+      return res.json({ id: ev.id, likes: ev.likes, passes: ev.passes || 0 });
+    } catch (e) {
+      return res.status(500).json({ error: `Store write failed: ${(e && e.message) || e}` });
+    }
+  }
   const ev = events.find((e) => e.id === req.params.id);
   if (!ev) return res.status(404).json({ error: 'Event not found' });
   ev.likes = (Number(ev.likes) || 0) + 1;
   saveStore();
-  res.json({ id: ev.id, likes: ev.likes, passes: ev.passes || 0 });
+  return res.json({ id: ev.id, likes: ev.likes, passes: ev.passes || 0 });
 });
 
-app.post('/api/events/:id/pass', voteLimiter, (req, res) => {
+app.post('/api/events/:id/pass', voteLimiter, async (req, res) => {
+  if (USE_SB) {
+    try {
+      const row = await sbGet('radar_events', req.params.id);
+      if (!row) return res.status(404).json({ error: 'Event not found' });
+      const passes = (Number(row.passes) || 0) + 1; // read row, update passes+1
+      const updated = await sbUpdate('radar_events', req.params.id, { passes });
+      const ev = updated ? fromRow(updated) : { ...fromRow(row), passes };
+      return res.json({ id: ev.id, likes: ev.likes || 0, passes: ev.passes });
+    } catch (e) {
+      return res.status(500).json({ error: `Store write failed: ${(e && e.message) || e}` });
+    }
+  }
   const ev = events.find((e) => e.id === req.params.id);
   if (!ev) return res.status(404).json({ error: 'Event not found' });
   ev.passes = (Number(ev.passes) || 0) + 1;
   saveStore();
-  res.json({ id: ev.id, likes: ev.likes || 0, passes: ev.passes });
+  return res.json({ id: ev.id, likes: ev.likes || 0, passes: ev.passes });
 });
 
 app.post('/api/flyer', (req, res, next) => {
@@ -366,7 +487,8 @@ function listenOn(port) {
         console.log(`[eventradar] listening on http://localhost:${port}`);
         console.log(`[eventradar] mode: ${AI_MODE ? 'AI (gemini vision on)' : 'NO-KEY (board works; /api/flyer returns honest 503 — set GEMINI_API_KEY for vision)'}`);
         console.log(`[eventradar] CORS origins: ${CORS_ORIGINS.join(', ')}`);
-        console.log(`[eventradar] store: ${STORE_FILE} (${events.length} events)`);
+        if (USE_SB) console.log('[eventradar] store: supabase (radar_events — source of truth)');
+        else console.log(`[eventradar] store: json-file (dev): ${STORE_FILE} (${events.length} events)`);
       });
     });
   });
