@@ -2,6 +2,8 @@
 
 Tinder-style local event discovery. Real Express backend + dual-mode store (Supabase when configured, JSON file otherwise); users submit real local events, swipe the shared deck, and optionally scan flyers with Gemini vision.
 
+**Planned:** location-aware discovery — geolocation, adjustable radius, live provider data and artist alerts. Design and trade-offs: [`docs/architecture-event-discovery.md`](docs/architecture-event-discovery.md).
+
 ## Run
 
 ```bash
