@@ -244,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnSampleScan.addEventListener('click', () => {
     // Labeled demo — never presented as AI output.
-    flyerPreview.style.backgroundImage = 'linear-gradient(135deg, #030712, #8b5cf6)';
+    flyerPreview.style.backgroundImage = 'linear-gradient(135deg, #030712, #00e3c0)';
     playScanVisualizer(() => {
       showExtracted(
         { title: 'Summer Indie Music Fest', date: '', time: '1:00 PM - 11:00 PM', venue: 'Riverside Outdoor Park', category: 'music' },
