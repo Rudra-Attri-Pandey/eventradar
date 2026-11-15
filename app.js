@@ -33,6 +33,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const filterCategory = document.getElementById('filter-category');
   const btnFilter = document.getElementById('btn-filter');
 
+  // Venue map elements
+  const venueMap = document.getElementById('venue-map');
+  const mapLink = document.getElementById('map-link');
+  const mapCaption = document.getElementById('map-caption');
+  const mapEmpty = document.getElementById('map-empty');
+
+
   // Scanner Elements
   const dropZone = document.getElementById('drop-zone');
   const fileInput = document.getElementById('file-input');
@@ -106,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
       emptyDeck.classList.remove('hidden');
       btnPass.disabled = true;
       btnLike.disabled = true;
+      updateVenueMap(null);
       return;
     }
 
@@ -137,7 +145,44 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
     swipeDeck.insertBefore(card, emptyDeck);
+    updateVenueMap(event);
   };
+
+
+  // Build a Google Maps query from the event's venue + area (no API key needed).
+  function venueQuery(event) {
+    if (!event) return '';
+    return [event.venue, event.area]
+      .map((p) => String(p || '').trim())
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  function updateVenueMap(event) {
+    const q = venueQuery(event);
+    if (!venueMap) return;
+    if (!q) {
+      venueMap.hidden = true;
+      venueMap.removeAttribute('src');
+      venueMap.dataset.query = '';
+      if (mapLink) { mapLink.hidden = true; mapLink.removeAttribute('href'); }
+      if (mapCaption) mapCaption.textContent = 'Swipe to an event to see where it is.';
+      if (mapEmpty) mapEmpty.hidden = false;
+      return;
+    }
+    const embed = 'https://maps.google.com/maps?q=' + encodeURIComponent(q) + '&z=14&output=embed';
+    venueMap.hidden = false;
+    if (venueMap.dataset.query !== q) {
+      venueMap.dataset.query = q;
+      venueMap.src = embed;
+    }
+    if (mapEmpty) mapEmpty.hidden = true;
+    if (mapCaption) mapCaption.textContent = q;
+    if (mapLink) {
+      mapLink.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
+      mapLink.hidden = false;
+    }
+  }
 
   async function vote(id, kind) {
     try {

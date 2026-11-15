@@ -50,6 +50,8 @@ app.use(helmet({
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'"],
       objectSrc: ["'none'"],
+      // Venue map: keyless Google Maps embed (no API key, no billing).
+      frameSrc: ['https://maps.google.com', 'https://www.google.com', 'https://*.google.com'],
     },
   },
   crossOriginEmbedderPolicy: false,

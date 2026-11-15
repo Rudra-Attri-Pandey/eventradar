@@ -64,6 +64,23 @@
             <button class="action-btn btn-like" id="btn-like" title="Interested (Swipe Right)">⭐</button>
           </div>
         </div>
+
+        <!-- Venue map (Google Maps embed, keyless) -->
+        <div class="map-card" id="map-card">
+          <div class="map-head">
+            <div>
+              <h3>Venue map</h3>
+              <p class="map-caption" id="map-caption">Swipe to an event to see where it is.</p>
+            </div>
+            <a class="btn btn-secondary map-link" id="map-link" href="#" target="_blank"
+               rel="noopener noreferrer" hidden>Open in Google Maps</a>
+          </div>
+          <div class="map-frame">
+            <iframe id="venue-map" title="Venue location on Google Maps"
+                    referrerpolicy="no-referrer-when-downgrade" allowfullscreen hidden></iframe>
+            <p class="map-empty" id="map-empty">No venue to map yet.</p>
+          </div>
+        </div>
       </section>
 
       <!-- Panel 2: Flyer Vision Scanner -->
