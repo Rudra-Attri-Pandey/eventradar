@@ -691,3 +691,6 @@ body {
 @media (max-width: 768px) {
   .map-frame iframe { height: 220px; }
 }
+
+/* Palette role - amber warning on sample data */
+.seed-badge { background: rgba(227, 179, 0, 0.95); color: #201a00; border-color: rgba(227, 179, 0, 0.6); }
